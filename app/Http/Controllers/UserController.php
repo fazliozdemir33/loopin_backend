@@ -204,6 +204,7 @@ class UserController extends Controller
                     $url = rtrim(env('R2_URL'), '/') . '/' . $path;
                     return response()->json(['status' => 'success', 'url' => $url]);
                 } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error('R2 Upload failed: ' . $e->getMessage());
                     // Fallback to local storage if R2 fails
                 }
             }

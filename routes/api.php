@@ -9,6 +9,8 @@ use App\Http\Controllers\UserController;
 
 Route::post('/auth/social', [AuthController::class, 'social']);
 Route::post('/chat/send', [ChatController::class, 'send']);
+Route::get('/chat/messages/{receiver_id}', [ChatController::class, 'getMessages']);
+Route::delete('/chat/conversations/{receiver_id}', [ChatController::class, 'deleteConversation']);
 Route::get('/conversations', [ChatController::class, 'getConversations']);
 Route::get('/users/me', [UserController::class, 'me']);
 Route::post('/users/profile', [UserController::class, 'updateProfile']);

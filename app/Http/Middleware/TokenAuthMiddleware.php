@@ -19,6 +19,13 @@ class TokenAuthMiddleware
                     return response()->json(['message' => 'BANNED', 'error' => 'Hesabınız yasaklanmıştır.'], 403);
                 }
                 Auth::setUser($user);
+                try {
+                    if (!$user->last_seen_at || now()->diffInMinutes($user->last_seen_at) > 2) {
+                        $user->update(['last_seen_at' => now()]);
+                    }
+                } catch (\Exception $e) {
+                    // Ignore migration errors on production
+                }
             }
         }
         return $next($request);

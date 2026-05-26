@@ -30,6 +30,7 @@ class User extends Authenticatable
             'interests' => 'array',
             'photos' => 'array',
             'is_banned' => 'boolean',
+            'last_seen_at' => 'datetime',
         ];
     }
 
@@ -41,5 +42,11 @@ class User extends Authenticatable
     public function getAvatarUrlAttribute($value)
     {
         return $this->is_banned ? null : $value;
+    }
+
+    public function getIsOnlineAttribute()
+    {
+        if (!$this->last_seen_at) return false;
+        return $this->last_seen_at->diffInMinutes(now()) <= 5;
     }
 }
