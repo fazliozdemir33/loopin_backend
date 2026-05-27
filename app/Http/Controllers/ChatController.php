@@ -16,6 +16,7 @@ class ChatController extends Controller
         $request->validate([
             'receiver_id' => 'required',
             'message' => 'required|string',
+            'type' => 'nullable|string',
         ]);
 
         $user = Auth::user();
@@ -23,7 +24,14 @@ class ChatController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
         
-        $result = $messageService->processMessage($user, $request->receiver_id, $request->message);
+        $this->cleanExpiredVoiceMessages();
+        
+        $result = $messageService->processMessage(
+            $user, 
+            $request->receiver_id, 
+            $request->message, 
+            $request->type ?? 'text'
+        );
 
         return response()->json($result);
     }
@@ -46,6 +54,12 @@ class ChatController extends Controller
             return response()->json(['data' => []]);
         }
 
+        // Mark messages as read
+        Message::where('conversation_id', $conversation->id)
+            ->where('sender_id', '!=', $user->id)
+            ->where('is_read', false)
+            ->update(['is_read' => true]);
+
         $deletedAt = $conversation->user1_id == $user->id ? $conversation->deleted_at_user1 : $conversation->deleted_at_user2;
 
         $messagesQuery = Message::where('conversation_id', $conversation->id);
@@ -53,6 +67,8 @@ class ChatController extends Controller
         if ($deletedAt) {
             $messagesQuery->where('created_at', '>', $deletedAt);
         }
+
+        $this->cleanExpiredVoiceMessages();
 
         $messages = $messagesQuery->orderBy('created_at', 'asc')
             ->get()
@@ -62,6 +78,8 @@ class ChatController extends Controller
                     'text' => $msg->text,
                     'sender_type' => $msg->sender_id == $user->id ? 'user' : 'other',
                     'created_at' => $msg->created_at,
+                    'type' => $msg->type,
+                    'listen_count' => $msg->listen_count,
                 ];
             });
 
@@ -117,15 +135,50 @@ class ChatController extends Controller
             ->map(function ($conv) use ($user) {
                 $otherUserId = $conv->user1_id == $user->id ? $conv->user2_id : $conv->user1_id;
                 $otherUser = User::find($otherUserId);
+                
+                if ($otherUser) {
+                    $hasBlockedMe = DB::table('blocks')
+                        ->where('user_id', $otherUserId)
+                        ->where('blocked_id', $user->id)
+                        ->exists();
+
+                    if ($hasBlockedMe) {
+                        $otherUser->name = 'Loopin Kullanıcısı';
+                        $otherUser->avatar_url = '';
+                        $otherUser->bio = '';
+                        $otherUser->photos = [];
+                    }
+                }
+
                 $limit = \App\Models\InteractionLimit::where('conversation_id', $conv->id)->first();
+                
+                // Get the last message
+                $lastMsgQuery = Message::where('conversation_id', $conv->id);
+                $deletedAt = $conv->user1_id == $user->id ? $conv->deleted_at_user1 : $conv->deleted_at_user2;
+                if ($deletedAt) {
+                    $lastMsgQuery->where('created_at', '>', $deletedAt);
+                }
+                
+                $lastMessage = $lastMsgQuery->orderBy('created_at', 'desc')->first();
+                
+                // Get unread message count
+                $unreadCount = Message::where('conversation_id', $conv->id)
+                    ->where('sender_id', '!=', $user->id)
+                    ->where('is_read', false)
+                    ->count();
                 
                 return [
                     'id' => $conv->id,
                     'user' => $otherUser,
                     'message_count' => $limit ? $limit->message_count : 0,
                     'is_unlocked' => $limit ? $limit->is_paid : false,
+                    'last_message' => $lastMessage ? $lastMessage->text : 'Sohbete devam et',
+                    'last_message_time' => $lastMessage ? $lastMessage->created_at : null,
+                    'unread_count' => $unreadCount,
                 ];
-            })->values();
+            })
+            ->sortByDesc('last_message_time')
+            ->values();
 
         return response()->json(['data' => $conversations]);
     }
@@ -153,6 +206,98 @@ class ChatController extends Controller
         } catch (\Exception $e) {
             \Log::error('Moderation error: ' . $e->getMessage());
             return false; // Fail open if API fails
+        }
+    }
+
+    public function listenMessage($id)
+    {
+        $user = Auth::user();
+        if (!$user) return response()->json(['message' => 'Unauthorized'], 401);
+
+        $message = Message::findOrFail($id);
+        
+        if ($message->type === 'voice') {
+            if ($message->listen_count >= 3) {
+                return response()->json([
+                    'status' => 'expired',
+                    'listen_count' => $message->listen_count,
+                    'message' => 'Bu ses kaydı tekrar dinlenemez.'
+                ]);
+            }
+
+            $message->increment('listen_count');
+
+            if ($message->listen_count >= 3) {
+                try {
+                    $oldPath = "voice_messages/message_{$message->id}.mp3";
+                    $newPath = "silinen_ses_kayitlari/message_{$message->id}.mp3";
+                    
+                    if (\Storage::disk('r2')->exists($oldPath)) {
+                        \Storage::disk('r2')->copy($oldPath, $newPath);
+                        \Storage::disk('r2')->delete($oldPath);
+                    }
+                } catch (\Exception $e) {
+                    \Log::error('R2 Voice move failed: ' . $e->getMessage());
+                }
+            }
+
+            return response()->json([
+                'status' => $message->listen_count >= 3 ? 'expired' : 'success',
+                'listen_count' => $message->listen_count
+            ]);
+        } elseif ($message->type === 'image') {
+            if ($message->listen_count >= 1) {
+                return response()->json([
+                    'status' => 'expired',
+                    'listen_count' => $message->listen_count,
+                    'message' => 'Bu resim tekrar görüntülenemez.'
+                ]);
+            }
+
+            $message->increment('listen_count');
+
+            try {
+                $oldPath = "images/message_{$message->id}.jpg";
+                $newPath = "silinen_resimler/message_{$message->id}.jpg";
+                
+                if (\Storage::disk('r2')->exists($oldPath)) {
+                    \Storage::disk('r2')->copy($oldPath, $newPath);
+                    \Storage::disk('r2')->delete($oldPath);
+                }
+            } catch (\Exception $e) {
+                \Log::error('R2 Image move failed: ' . $e->getMessage());
+            }
+
+            return response()->json([
+                'status' => 'expired',
+                'listen_count' => $message->listen_count
+            ]);
+        }
+
+        return response()->json(['message' => 'Invalid message type'], 400);
+    }
+
+    private function cleanExpiredVoiceMessages()
+    {
+        $expiredMessages = Message::where('type', 'voice')
+            ->where('listen_count', '<', 3)
+            ->where('created_at', '<', now()->subDays(7))
+            ->get();
+
+        foreach ($expiredMessages as $message) {
+            $message->update(['listen_count' => 3]);
+            
+            try {
+                $oldPath = "voice_messages/message_{$message->id}.mp3";
+                $newPath = "silinen_ses_kayitlari/message_{$message->id}.mp3";
+                
+                if (\Storage::disk('r2')->exists($oldPath)) {
+                    \Storage::disk('r2')->copy($oldPath, $newPath);
+                    \Storage::disk('r2')->delete($oldPath);
+                }
+            } catch (\Exception $e) {
+                \Log::error('R2 Voice move on timeout failed: ' . $e->getMessage());
+            }
         }
     }
 }

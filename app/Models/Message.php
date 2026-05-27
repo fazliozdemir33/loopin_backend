@@ -13,7 +13,9 @@ class Message extends Model
         'conversation_id',
         'sender_id',
         'text',
-        'is_locked'
+        'is_locked',
+        'type',
+        'listen_count',
     ];
 
     public function conversation()

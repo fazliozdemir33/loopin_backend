@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Http;
 
 class MessageService
 {
-    public function processMessage($user, $receiverId, $text)
+    public function processMessage($user, $receiverId, $text, $type = 'text')
     {
         $conversation = DB::table('conversations')
             ->where(function($q) use ($user, $receiverId) {
@@ -45,6 +45,25 @@ class MessageService
             ]);
         }
 
+        // Block Check Guard
+        $isBlocked = DB::table('blocks')
+            ->where(function($q) use ($user, $receiverId) {
+                $q->where('user_id', $user->id)->where('blocked_id', $receiverId);
+            })
+            ->orWhere(function($q) use ($user, $receiverId) {
+                $q->where('user_id', $receiverId)->where('blocked_id', $user->id);
+            })
+            ->exists();
+
+        if ($isBlocked) {
+            abort(403, 'Bu kişiye mesaj gönderemezsiniz.');
+        }
+
+        // Voice or Image Message Unlock check
+        if (($type === 'voice' || $type === 'image') && !$limit->is_paid) {
+            abort(403, 'Sesli veya resimli mesaj göndermek için sohbeti açmalısınız.');
+        }
+
         // Limit Guard / Payment Wall Check
         if (!$limit->is_paid) {
             if ($limit->message_count >= 5) {
@@ -62,7 +81,36 @@ class MessageService
             'conversation_id' => $conversation->id,
             'sender_id'       => $user->id, 
             'text'            => $text,
+            'type'            => $type,
         ]);
+
+        if ($message->type === 'voice') {
+            try {
+                \Illuminate\Support\Facades\Storage::disk('r2')->put(
+                    "voice_messages/message_{$message->id}.mp3",
+                    "Simulated voice recording audio file content for message ID: {$message->id}"
+                );
+            } catch (\Exception $e) {
+                \Log::error('R2 Voice upload failed: ' . $e->getMessage());
+            }
+        }
+
+        if ($message->type === 'image') {
+            try {
+                $imageData = $text;
+                if (str_contains($imageData, 'base64,')) {
+                    $imageData = explode('base64,', $imageData)[1];
+                }
+                $decoded = base64_decode($imageData);
+                
+                \Illuminate\Support\Facades\Storage::disk('r2')->put(
+                    "images/message_{$message->id}.jpg",
+                    $decoded
+                );
+            } catch (\Exception $e) {
+                \Log::error('R2 Image upload failed: ' . $e->getMessage());
+            }
+        }
 
         $limit->increment('message_count');
 

@@ -116,6 +116,28 @@ class UserController extends Controller
         ]);
     }
 
+    public function unblockUser(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+        
+        $validated = $request->validate([
+            'blocked_id' => 'required|integer|exists:users,id',
+        ]);
+        
+        \Illuminate\Support\Facades\DB::table('blocks')
+            ->where('user_id', $user->id)
+            ->where('blocked_id', $validated['blocked_id'])
+            ->delete();
+            
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Engelleme kaldırıldı.'
+        ]);
+    }
+
     public function reportUser(Request $request)
     {
         $user = Auth::user();

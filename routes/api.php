@@ -12,11 +12,13 @@ Route::post('/chat/send', [ChatController::class, 'send']);
 Route::get('/chat/messages/{receiver_id}', [ChatController::class, 'getMessages']);
 Route::delete('/chat/conversations/{receiver_id}', [ChatController::class, 'deleteConversation']);
 Route::get('/conversations', [ChatController::class, 'getConversations']);
+Route::post('/chat/messages/{id}/listen', [ChatController::class, 'listenMessage']);
 Route::get('/users/me', [UserController::class, 'me']);
 Route::post('/users/profile', [UserController::class, 'updateProfile']);
 Route::get('/users/notifications', [UserController::class, 'notifications']);
 Route::post('/users/notification-settings', [UserController::class, 'updateNotificationSettings']);
 Route::post('/users/block', [UserController::class, 'blockUser']);
+Route::post('/users/unblock', [UserController::class, 'unblockUser']);
 Route::post('/users/report', [UserController::class, 'reportUser']);
 Route::post('/users/delete', [UserController::class, 'deleteAccount']);
 Route::get('/users/explore', function (Request $request) {
@@ -25,8 +27,22 @@ Route::get('/users/explore', function (Request $request) {
         return response()->json(['message' => 'Unauthorized'], 401);
     }
 
+    // Get list of blocked user IDs and users who blocked current user
+    $blockedUserIds = \Illuminate\Support\Facades\DB::table('blocks')
+        ->where('user_id', $user->id)
+        ->pluck('blocked_id')
+        ->toArray();
+
+    $blockerUserIds = \Illuminate\Support\Facades\DB::table('blocks')
+        ->where('blocked_id', $user->id)
+        ->pluck('user_id')
+        ->toArray();
+
+    $excludeIds = array_merge($blockedUserIds, $blockerUserIds);
+
     $query = \App\Models\User::where('id', '!=', $user->id)
         ->where('is_banned', false)
+        ->whereNotIn('id', $excludeIds)
         ->whereNotNull('avatar_url')
         ->where('avatar_url', '!=', '');
 
@@ -144,7 +160,7 @@ Route::get('/wallet/history', function () {
 
 Route::get('/chat/status/{receiver_id}', function ($receiverId) {
     $user = \Illuminate\Support\Facades\Auth::user();
-    if (!$user) return response()->json(['is_unlocked' => false, 'message_count' => 0]);
+    if (!$user) return response()->json(['is_unlocked' => false, 'message_count' => 0, 'is_blocked' => false, 'am_i_blocked' => false]);
     
     $conv = \Illuminate\Support\Facades\DB::table('conversations')
         ->where(function($q) use ($user, $receiverId) {
@@ -155,15 +171,32 @@ Route::get('/chat/status/{receiver_id}', function ($receiverId) {
         })
         ->first();
         
+    $isBlockedByMe = \Illuminate\Support\Facades\DB::table('blocks')
+        ->where('user_id', $user->id)
+        ->where('blocked_id', $receiverId)
+        ->exists();
+
+    $amIBlocked = \Illuminate\Support\Facades\DB::table('blocks')
+        ->where('user_id', $receiverId)
+        ->where('blocked_id', $user->id)
+        ->exists();
+
     if ($conv) {
         $limit = \App\Models\InteractionLimit::where('conversation_id', $conv->id)->first();
         return response()->json([
             'is_unlocked' => $limit ? (bool)$limit->is_paid : false,
-            'message_count' => $limit ? $limit->message_count : 0
+            'message_count' => $limit ? $limit->message_count : 0,
+            'is_blocked' => $isBlockedByMe,
+            'am_i_blocked' => $amIBlocked,
         ]);
     }
     
-    return response()->json(['is_unlocked' => false, 'message_count' => 0]);
+    return response()->json([
+        'is_unlocked' => false, 
+        'message_count' => 0,
+        'is_blocked' => $isBlockedByMe,
+        'am_i_blocked' => $amIBlocked,
+    ]);
 });
 
 Route::get('/support/tickets', [UserController::class, 'getSupportTickets']);
