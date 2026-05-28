@@ -172,7 +172,11 @@ class ChatController extends Controller
                     'user' => $otherUser,
                     'message_count' => $limit ? $limit->message_count : 0,
                     'is_unlocked' => $limit ? $limit->is_paid : false,
-                    'last_message' => $lastMessage ? $lastMessage->text : 'Sohbete devam et',
+                    'last_message' => $lastMessage 
+                        ? ($lastMessage->type === 'image' 
+                            ? 'Tek kullanımlık resim' 
+                            : ($lastMessage->type === 'voice' ? 'Ses kaydı' : $lastMessage->text)) 
+                        : 'Sohbete devam et',
                     'last_message_time' => $lastMessage ? $lastMessage->created_at : null,
                     'unread_count' => $unreadCount,
                 ];

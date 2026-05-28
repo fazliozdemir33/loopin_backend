@@ -56,7 +56,12 @@ Route::get('/users/explore', function (Request $request) {
 
         $users = (clone $query)
             ->selectRaw("*, $haversine as distance")
-            ->whereRaw("$haversine <= ?", [$maxDistance])
+            ->where(function($q) use ($haversine, $maxDistance) {
+                $q->whereRaw("$haversine <= ?", [$maxDistance])
+                  ->orWhereNull('latitude')
+                  ->orWhereNull('longitude');
+            })
+            ->orderByRaw("CASE WHEN latitude IS NOT NULL AND longitude IS NOT NULL THEN 0 ELSE 1 END")
             ->orderBy('distance', 'asc')
             ->take(20)
             ->get();

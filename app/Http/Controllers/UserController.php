@@ -57,6 +57,9 @@ class UserController extends Controller
             'interests' => 'nullable|array',
             'photos' => 'nullable|array',
             'name' => 'nullable|string',
+            'latitude' => 'nullable|numeric',
+            'longitude' => 'nullable|numeric',
+            'location' => 'nullable|string',
         ]);
         $user->update($validated);
 

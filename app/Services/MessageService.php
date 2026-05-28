@@ -86,9 +86,18 @@ class MessageService
 
         if ($message->type === 'voice') {
             try {
+                $voiceData = $text;
+                if (str_contains($voiceData, '|')) {
+                    $voiceData = explode('|', $voiceData)[0];
+                }
+                if (str_contains($voiceData, 'base64,')) {
+                    $voiceData = explode('base64,', $voiceData)[1];
+                }
+                $decoded = base64_decode($voiceData);
+                
                 \Illuminate\Support\Facades\Storage::disk('r2')->put(
                     "voice_messages/message_{$message->id}.mp3",
-                    "Simulated voice recording audio file content for message ID: {$message->id}"
+                    $decoded
                 );
             } catch (\Exception $e) {
                 \Log::error('R2 Voice upload failed: ' . $e->getMessage());
