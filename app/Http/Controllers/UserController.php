@@ -41,6 +41,19 @@ class UserController extends Controller
         return response()->json(['status' => 'success']);
     }
 
+    public function updateFcmToken(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $request->validate(['fcm_token' => 'required|string']);
+        $user->update(['fcm_token' => $request->fcm_token]);
+
+        return response()->json(['status' => 'success']);
+    }
+
     public function updateProfile(Request $request)
     {
         $user = Auth::user();

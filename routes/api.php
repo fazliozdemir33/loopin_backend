@@ -21,6 +21,7 @@ Route::post('/users/block', [UserController::class, 'blockUser']);
 Route::post('/users/unblock', [UserController::class, 'unblockUser']);
 Route::post('/users/report', [UserController::class, 'reportUser']);
 Route::post('/users/delete', [UserController::class, 'deleteAccount']);
+Route::post('/users/fcm-token', [UserController::class, 'updateFcmToken']);
 Route::get('/users/explore', function (Request $request) {
     $user = \Illuminate\Support\Facades\Auth::user();
     if (!$user) {

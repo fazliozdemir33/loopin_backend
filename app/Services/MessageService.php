@@ -123,10 +123,70 @@ class MessageService
 
         $limit->increment('message_count');
 
+        // FCM Push Bildirimi gönder
+        $this->sendPushNotification($user, $receiverId, $text, $type);
+
         return [
             'status' => 'success',
             'message_count' => $limit->message_count
         ];
+    }
+
+    private function sendPushNotification($sender, $receiverId, $text, $type = 'text')
+    {
+        try {
+            $receiver = \App\Models\User::find($receiverId);
+            if (!$receiver || !$receiver->fcm_token) {
+                return;
+            }
+
+            // Bildirim mesajı içeriğini belirle
+            $body = match($type) {
+                'voice' => '🎵 Ses kaydı gönderdi',
+                'image' => '📸 Resim gönderdi',
+                default => $text,
+            };
+
+            // Mesajı 100 karakterle sınırla
+            if (strlen($body) > 100) {
+                $body = substr($body, 0, 97) . '...';
+            }
+
+            $senderName = $sender->name ?? 'Loopn';
+
+            $serverKey = env('FCM_SERVER_KEY');
+            if (!$serverKey) {
+                \Log::warning('FCM_SERVER_KEY tanımlanmamış, bildirim gönderilemedi.');
+                return;
+            }
+
+            Http::withHeaders([
+                'Authorization' => 'key=' . $serverKey,
+                'Content-Type'  => 'application/json',
+            ])->post('https://fcm.googleapis.com/fcm/send', [
+                'to' => $receiver->fcm_token,
+                'notification' => [
+                    'title' => $senderName,
+                    'body'  => $body,
+                    'sound' => 'default',
+                    'badge' => '1',
+                ],
+                'data' => [
+                    'type'        => 'new_message',
+                    'sender_id'   => (string) $sender->id,
+                    'sender_name' => $senderName,
+                ],
+                'priority'             => 'high',
+                'content_available'    => true,
+                'apns' => [
+                    'headers' => [
+                        'apns-priority' => '10',
+                    ],
+                ],
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('FCM push hatası: ' . $e->getMessage());
+        }
     }
 
     private function isModerationBlocked($text)
