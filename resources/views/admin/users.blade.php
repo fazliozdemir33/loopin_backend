@@ -88,10 +88,11 @@
                     {{-- Profile info --}}
                     <td>
                         <div class="text-xs space-y-0.5">
-                            @if($user->gender)
+                            @php $rawGender = $user->getRawOriginal('gender'); @endphp
+                            @if($rawGender)
                                 <div class="flex items-center gap-1" style="color: rgba(255,255,255,0.55);">
-                                    <i class="fas fa-{{ $user->gender=='Erkek'?'mars':'venus' }}" style="color: {{ $user->gender=='Erkek'?'#60a5fa':'#f472b6' }};"></i>
-                                    {{ $user->gender=='Erkek'?'Erkek':'Kadın' }}
+                                    <i class="fas fa-{{ $rawGender=='Erkek'?'mars':'venus' }}" style="color: {{ $rawGender=='Erkek'?'#60a5fa':'#f472b6' }};"></i>
+                                    {{ $rawGender }}
                                     @if($user->age) &bull; {{ $user->age }} yaş @endif
                                 </div>
                             @endif
@@ -132,8 +133,11 @@
 
                     {{-- Registration date --}}
                     <td>
-                        <div class="text-xs text-white">{{ $user->created_at->format('d.m.Y') }}</div>
-                        <div class="text-xs" style="color: var(--text-muted);">{{ $user->created_at->format('H:i') }}</div>
+                        @php
+                            $createdTR = $user->created_at->setTimezone('Europe/Istanbul');
+                        @endphp
+                        <div class="text-xs text-white">{{ $createdTR->format('d.m.Y') }}</div>
+                        <div class="text-xs" style="color: var(--text-muted);">{{ $createdTR->format('H:i') }}</div>
                     </td>
 
                     {{-- Actions --}}
@@ -243,6 +247,46 @@
                                     {{ $user->is_banned ? 'Banı Kaldır' : 'Banla' }}
                                 </button>
                             </form>
+
+                            {{-- Delete Account Button --}}
+                            <button type="button"
+                                class="btn py-1.5 text-xs btn-danger"
+                                style="background: rgba(220,38,38,0.15); border-color: rgba(220,38,38,0.4); color: #f87171;"
+                                onclick="document.getElementById('deleteModal-{{ $user->id }}').classList.remove('hidden')">
+                                <i class="fas fa-trash-alt"></i> Sil
+                            </button>
+
+                            {{-- Delete Confirmation Modal --}}
+                            <div id="deleteModal-{{ $user->id }}" class="fixed inset-0 bg-black/60 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+                                <div class="card w-full max-w-sm p-6 relative text-left">
+                                    <div class="flex items-center gap-3 mb-4">
+                                        <div style="width:40px;height:40px;border-radius:50%;background:rgba(220,38,38,0.15);display:flex;align-items:center;justify-content:center;">
+                                            <i class="fas fa-trash-alt" style="color:#f87171;"></i>
+                                        </div>
+                                        <div>
+                                            <h3 class="text-base font-bold text-white">Hesabı Kalıcı Sil</h3>
+                                            <p class="text-xs" style="color:var(--text-muted);">Bu işlem geri alınamaz!</p>
+                                        </div>
+                                    </div>
+                                    <p class="text-sm mb-5" style="color:rgba(255,255,255,0.7);">
+                                        <strong class="text-white">{{ $user->getRawOriginal('name') ?: 'Bu kullanıcı' }}</strong>
+                                        adlı kullanıcı ve tüm mesajları, sohbetleri, raporları kalıcı olarak silinecek. Devam etmek istiyor musunuz?
+                                    </p>
+                                    <div class="flex justify-end gap-2">
+                                        <button type="button" class="btn btn-ghost"
+                                            onclick="document.getElementById('deleteModal-{{ $user->id }}').classList.add('hidden')">
+                                            İptal
+                                        </button>
+                                        <form action="{{ route('admin.users.delete', $user->id) }}" method="POST">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="btn btn-danger">
+                                                <i class="fas fa-trash-alt"></i> Evet, Kalıcı Sil
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </td>
                 </tr>

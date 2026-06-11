@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'password', 'age', 'height', 'bio', 'gender', 'relationship_goal', 'zodiac_sign', 'avatar_url', 'interests', 'photos', 'latitude', 'longitude', 'wallet_balance', 'provider', 'apple_sub', 'device_id', 'is_banned', 'is_suspended', 'fcm_token'])]
+#[Fillable(['name', 'email', 'password', 'age', 'height', 'bio', 'gender', 'relationship_goal', 'zodiac_sign', 'avatar_url', 'interests', 'photos', 'latitude', 'longitude', 'wallet_balance', 'provider', 'apple_sub', 'device_id', 'is_banned', 'is_suspended', 'suspension_reason', 'fcm_token'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -37,6 +37,10 @@ class User extends Authenticatable
 
     public function getNameAttribute($value)
     {
+        // Admin panel (web session) — maskeleme yapma
+        if (session('admin_logged_in')) {
+            return $value;
+        }
         if (auth()->check() && auth()->id() === $this->id) {
             return $value;
         }
@@ -45,6 +49,10 @@ class User extends Authenticatable
 
     public function getAvatarUrlAttribute($value)
     {
+        // Admin panel (web session) — maskeleme yapma
+        if (session('admin_logged_in')) {
+            return $value;
+        }
         if (auth()->check() && auth()->id() === $this->id) {
             return $value;
         }

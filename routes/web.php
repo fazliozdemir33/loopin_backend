@@ -197,15 +197,44 @@ Route::prefix('admin')->group(function () {
             return back()->with('success', $user->getRawOriginal('name') . ' adlı kullanıcı başarıyla ' . $status . '!');
         })->name('admin.users.toggle_ban');
 
-        Route::post('/users/{id}/toggle-suspend', function ($id) {
+        Route::post('/users/{id}/toggle-suspend', function (Request $request, $id) {
             $user = \App\Models\User::findOrFail($id);
             $newStatus = !$user->is_suspended;
             $user->is_suspended = $newStatus;
+            if ($newStatus && $request->filled('suspension_reason')) {
+                $user->suspension_reason = $request->input('suspension_reason');
+            } elseif (!$newStatus) {
+                $user->suspension_reason = null;
+            }
             $user->save();
 
             $status = $newStatus ? 'askıya alındı' : 'askısı kaldırıldı';
             return back()->with('success', $user->getRawOriginal('name') . ' adlı kullanıcı başarıyla ' . $status . '!');
         })->name('admin.users.toggle_suspend');
+
+        Route::delete('/users/{id}', function ($id) {
+            $user = \App\Models\User::findOrFail($id);
+            $name = $user->getRawOriginal('name') ?? 'Kullanıcı';
+
+            // İlişkili mesajları ve sohbetleri temizle
+            $convIds = \App\Models\Conversation::where('user1_id', $id)
+                ->orWhere('user2_id', $id)
+                ->pluck('id');
+            \App\Models\Message::whereIn('conversation_id', $convIds)->delete();
+            \App\Models\Conversation::whereIn('id', $convIds)->delete();
+
+            // Bloklar, raporlar, bildirimler
+            \Illuminate\Support\Facades\DB::table('blocks')
+                ->where('user_id', $id)->orWhere('blocked_id', $id)->delete();
+            \Illuminate\Support\Facades\DB::table('reports')
+                ->where('reporter_id', $id)->orWhere('reported_id', $id)->delete();
+            \App\Models\Notification::where('user_id', $id)->delete();
+
+            // Kullanıcıyı sil
+            $user->delete();
+
+            return back()->with('success', '"' . $name . '" adlı kullanıcı ve tüm verileri kalıcı olarak silindi!');
+        })->name('admin.users.delete');
 
         Route::get('/users/{id}/messages', function ($id) {
             $user = \App\Models\User::findOrFail($id);
