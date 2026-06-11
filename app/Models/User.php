@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'password', 'age', 'bio', 'gender', 'zodiac_sign', 'avatar_url', 'interests', 'photos', 'latitude', 'longitude', 'wallet_balance', 'provider', 'device_id', 'is_banned', 'fcm_token'])]
+#[Fillable(['name', 'email', 'password', 'age', 'height', 'bio', 'gender', 'relationship_goal', 'zodiac_sign', 'avatar_url', 'interests', 'photos', 'latitude', 'longitude', 'wallet_balance', 'provider', 'device_id', 'is_banned', 'is_suspended', 'fcm_token'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -29,19 +29,26 @@ class User extends Authenticatable
             'password' => 'hashed',
             'interests' => 'array',
             'photos' => 'array',
-            'is_banned' => 'boolean',
-            'last_seen_at' => 'datetime',
+            'is_banned'     => 'boolean',
+            'is_suspended'  => 'boolean',
+            'last_seen_at'  => 'datetime',
         ];
     }
 
     public function getNameAttribute($value)
     {
-        return $this->is_banned ? 'Loopn Kullanıcısı' : $value;
+        if (auth()->check() && auth()->id() === $this->id) {
+            return $value;
+        }
+        return ($this->is_banned || $this->is_suspended) ? 'Loopn Kullanıcısı' : $value;
     }
 
     public function getAvatarUrlAttribute($value)
     {
-        return $this->is_banned ? null : $value;
+        if (auth()->check() && auth()->id() === $this->id) {
+            return $value;
+        }
+        return ($this->is_banned || $this->is_suspended) ? null : $value;
     }
 
     public function getIsOnlineAttribute()
