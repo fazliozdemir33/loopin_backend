@@ -1,82 +1,119 @@
 @extends('admin.layout')
 
-@section('header')
-<div class="flex items-center">
-    <a href="{{ route('admin.users') }}" class="text-gray-500 hover:text-gray-700 mr-4">
-        <i class="fas fa-arrow-left"></i>
-    </a>
-    {{ $user->name ?: 'İsimsiz' }} - Sohbetleri
-</div>
+@section('title', 'Sohbetler — ' . ($user->getRawOriginal('name') ?: 'İsimsiz'))
+@section('header', ($user->getRawOriginal('name') ?: 'İsimsiz') . ' — Sohbetler')
+@section('breadcrumb', 'Kullanıcılar / Sohbet Geçmişi')
+
+@section('topbar-actions')
+<a href="{{ route('admin.users') }}" class="btn btn-ghost text-xs">
+    <i class="fas fa-arrow-left"></i> Kullanıcılara Dön
+</a>
 @endsection
 
 @section('content')
-<div class="space-y-6">
+
+{{-- User profile card --}}
+<div class="card p-5 mb-5 flex items-center gap-4">
+    @if($user->getRawOriginal('avatar_url'))
+        <img src="{{ $user->getRawOriginal('avatar_url') }}" class="w-14 h-14 rounded-full object-cover ring-2 ring-pink-500/30">
+    @else
+        <div class="w-14 h-14 rounded-full avatar-placeholder text-lg"><i class="fas fa-user"></i></div>
+    @endif
+    <div class="flex-1">
+        <div class="font-bold text-white text-base">{{ $user->getRawOriginal('name') ?: 'İsimsiz' }}</div>
+        <div class="text-xs mt-0.5" style="color: var(--text-muted);">{{ $user->email ?: 'E-posta yok' }}</div>
+        <div class="flex items-center gap-3 mt-2">
+            @if($user->is_banned)
+                <span class="badge badge-red"><i class="fas fa-ban" style="font-size:9px;"></i> Yasaklı</span>
+            @else
+                <span class="badge badge-green"><i class="fas fa-circle" style="font-size:7px;"></i> Aktif</span>
+            @endif
+            @if($user->gender)
+                <span class="badge badge-blue">
+                    <i class="fas fa-{{ $user->gender=='male'?'mars':'venus' }}"></i>
+                    {{ $user->gender=='male'?'Erkek':'Kadın' }}
+                    @if($user->age) — {{ $user->age }} yaş @endif
+                </span>
+            @endif
+            <span class="badge badge-yellow"><i class="fas fa-key"></i> {{ $user->wallet_balance ?? 0 }} Anahtar</span>
+            <span class="badge badge-purple"><i class="fas fa-comments"></i> {{ $conversations->count() }} Sohbet</span>
+        </div>
+    </div>
+</div>
+
+{{-- Conversations --}}
+<div class="space-y-4">
     @forelse($conversations as $conv)
         @php
             $otherUser = $conv->user1_id == $user->id ? $conv->user2 : $conv->user1;
         @endphp
-        
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <!-- Conversation Header -->
-            <div class="bg-gray-50 px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-                <div class="flex items-center">
-                    @if($otherUser && $otherUser->avatar_url)
-                        <img class="h-10 w-10 rounded-full object-cover border-2 border-white shadow-sm" src="{{ $otherUser->avatar_url }}" alt="">
+
+        <div class="card overflow-hidden">
+            {{-- Conversation header --}}
+            <div class="flex items-center justify-between p-4 border-b" style="border-color: var(--border); background: rgba(255,255,255,0.02);">
+                <div class="flex items-center gap-3">
+                    @if($otherUser && $otherUser->getRawOriginal('avatar_url'))
+                        <img src="{{ $otherUser->getRawOriginal('avatar_url') }}" class="avatar">
                     @else
-                        <div class="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 border-2 border-white shadow-sm">
-                            <i class="fas fa-user"></i>
-                        </div>
+                        <div class="avatar-placeholder"><i class="fas fa-user text-xs"></i></div>
                     @endif
-                    <div class="ml-3">
-                        <div class="text-sm font-bold text-gray-900">Sohbet: {{ $otherUser ? $otherUser->name : 'Silinmiş Kullanıcı' }}</div>
-                        <div class="text-xs text-gray-500">Son güncelleme: {{ $conv->updated_at->diffForHumans() }}</div>
+                    <div>
+                        <div class="text-sm font-semibold text-white">
+                            {{ $otherUser ? ($otherUser->getRawOriginal('name') ?: 'İsimsiz') : 'Silinmiş Kullanıcı' }}
+                        </div>
+                        <div class="text-xs" style="color: var(--text-muted);">
+                            Son güncelleme: {{ $conv->updated_at->diffForHumans() }}
+                        </div>
                     </div>
                 </div>
-                <div>
-                    <span class="px-3 py-1 text-xs font-semibold rounded-full {{ $conv->is_unlocked ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800' }}">
-                        {{ $conv->is_unlocked ? 'Kilit Açık' : 'Kilitli' }}
-                    </span>
-                    <span class="ml-2 px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                        {{ $conv->messages->count() }} / {{ $conv->message_count }} Mesaj
-                    </span>
+                <div class="flex items-center gap-2">
+                    @if($conv->is_unlocked)
+                        <span class="badge badge-green"><i class="fas fa-lock-open" style="font-size:9px;"></i> Kilit Açık</span>
+                    @else
+                        <span class="badge badge-yellow"><i class="fas fa-lock" style="font-size:9px;"></i> Kilitli</span>
+                    @endif
+                    <span class="badge badge-blue"><i class="fas fa-message" style="font-size:9px;"></i> {{ $conv->messages->count() }} / {{ $conv->message_count }}</span>
                 </div>
             </div>
-            
-            <!-- Conversation Messages -->
-            <div class="p-6 bg-gray-50/30">
+
+            {{-- Messages --}}
+            <div class="p-4 space-y-3 max-h-80 overflow-y-auto" style="background: rgba(0,0,0,0.2);">
                 @if($conv->messages->count() > 0)
-                    <div class="space-y-4">
-                        @foreach($conv->messages->reverse() as $msg)
-                            @php
-                                $isOwner = $msg->sender_id == $user->id;
-                            @endphp
-                            
-                            <div class="flex {{ $isOwner ? 'justify-end' : 'justify-start' }}">
-                                <div class="max-w-[70%] rounded-2xl px-4 py-2 {{ $isOwner ? 'bg-pink-600 text-white rounded-tr-sm' : 'bg-white text-gray-800 border border-gray-100 shadow-sm rounded-tl-sm' }}">
-                                    <div class="text-[15px]">{{ $msg->text }}</div>
-                                    <div class="text-[10px] mt-1 {{ $isOwner ? 'text-pink-200' : 'text-gray-400' }} text-right">
-                                        {{ $msg->created_at->format('H:i') }}
+                    @foreach($conv->messages->reverse() as $msg)
+                        @php $isOwner = $msg->sender_id == $user->id; @endphp
+                        <div class="flex {{ $isOwner ? 'justify-end' : 'justify-start' }}">
+                            <div class="max-w-[70%] rounded-2xl px-4 py-2.5 {{ $isOwner ? 'rounded-tr-sm' : 'rounded-tl-sm' }}"
+                                style="{{ $isOwner ? 'background: linear-gradient(135deg, #ec4899, #a855f7); color: #fff;' : 'background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.08); color: #e2e2e8;' }}">
+                                @if($msg->type == 'voice')
+                                    <div class="flex items-center gap-2 text-xs">
+                                        <i class="fas fa-microphone"></i>
+                                        <span>Sesli Mesaj</span>
+                                        @if($msg->voice_duration)
+                                            <span class="opacity-70">{{ $msg->voice_duration }}s</span>
+                                        @endif
                                     </div>
-                                </div>
+                                @else
+                                    <div class="text-sm leading-snug">{{ $msg->text ?: '—' }}</div>
+                                @endif
+                                <div class="text-[10px] mt-1 text-right opacity-60">{{ $msg->created_at->format('H:i') }}</div>
                             </div>
-                        @endforeach
-                    </div>
+                        </div>
+                    @endforeach
                 @else
-                    <div class="text-center py-8 text-gray-500">
-                        <i class="fas fa-comment-slash text-3xl mb-2 text-gray-300"></i>
-                        <p>Henüz mesaj yok</p>
+                    <div class="text-center py-8" style="color: var(--text-muted);">
+                        <i class="fas fa-comment-slash text-2xl mb-2 block opacity-30"></i>
+                        Henüz mesaj yok
                     </div>
                 @endif
             </div>
         </div>
     @empty
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
-            <div class="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-300 text-3xl">
-                <i class="fas fa-inbox"></i>
-            </div>
-            <h3 class="text-lg font-bold text-gray-800 mb-1">Sohbet Bulunamadı</h3>
-            <p class="text-gray-500">Bu kullanıcının henüz hiçbir eşleşmesi veya mesajlaşması yok.</p>
+        <div class="card p-16 text-center">
+            <i class="fas fa-inbox text-4xl block mb-3 opacity-20 text-white"></i>
+            <div class="text-sm font-semibold text-white mb-1">Sohbet Bulunamadı</div>
+            <div class="text-xs" style="color: var(--text-muted);">Bu kullanıcının henüz hiçbir eşleşmesi yok.</div>
         </div>
     @endforelse
 </div>
+
 @endsection

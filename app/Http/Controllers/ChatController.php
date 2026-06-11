@@ -23,6 +23,23 @@ class ChatController extends Controller
         if (!$user) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
+
+        // Profili tamamlanmamış kullanıcılar (Loopn User / Loopin User) mesaj gönderemesin
+        $defaultNamePatterns = ['loopn user', 'loopin user'];
+        $nameLower = strtolower(trim($user->name ?? ''));
+        $isDefaultName = empty($nameLower);
+        foreach ($defaultNamePatterns as $pattern) {
+            if (str_starts_with($nameLower, $pattern)) {
+                $isDefaultName = true;
+                break;
+            }
+        }
+        if ($isDefaultName) {
+            return response()->json([
+                'message' => 'Profilini tamamlamadan mesaj gönderemezsin.',
+                'error' => 'incomplete_profile'
+            ], 403);
+        }
         
         $this->cleanExpiredVoiceMessages();
         
@@ -167,10 +184,14 @@ class ChatController extends Controller
                     ->where('is_read', false)
                     ->count();
                 
+                $userMessageCount = Message::where('conversation_id', $conv->id)
+                    ->where('sender_id', $user->id)
+                    ->count();
+
                 return [
                     'id' => $conv->id,
                     'user' => $otherUser,
-                    'message_count' => $limit ? $limit->message_count : 0,
+                    'message_count' => $userMessageCount,
                     'is_unlocked' => $limit ? $limit->is_paid : false,
                     'last_message' => $lastMessage 
                         ? ($lastMessage->type === 'image' 

@@ -1,96 +1,292 @@
 @extends('admin.layout')
 
-@section('header', 'Kullanıcılar')
+@section('title', 'Kullanıcılar')
+@section('header', 'Kullanıcı Yönetimi')
+@section('breadcrumb', 'Tüm Kullanıcılar')
+
+@section('topbar-actions')
+<form method="GET" action="{{ route('admin.users') }}" class="flex items-center gap-2">
+    <div class="relative">
+        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-xs" style="color: var(--text-muted);"></i>
+        <input type="text" name="search" value="{{ request('search') }}" placeholder="Ad, e-posta, ID ara..."
+            class="form-input pl-9 py-2 text-xs" style="width: 220px;">
+    </div>
+    <select name="status" class="form-input py-2 text-xs" style="width: 130px;">
+        <option value="">Tüm Durumlar</option>
+        <option value="active" {{ request('status')=='active'?'selected':'' }}>Aktif</option>
+        <option value="suspended" {{ request('status')=='suspended'?'selected':'' }}>Askıda</option>
+        <option value="banned" {{ request('status')=='banned'?'selected':'' }}>Yasaklı</option>
+        <option value="incomplete" {{ request('status')=='incomplete'?'selected':'' }}>Eksik Profil</option>
+    </select>
+    <select name="provider" class="form-input py-2 text-xs" style="width: 120px;">
+        <option value="">Tüm Giriş</option>
+        <option value="google" {{ request('provider')=='google'?'selected':'' }}>Google</option>
+        <option value="apple" {{ request('provider')=='apple'?'selected':'' }}>Apple</option>
+    </select>
+    <button type="submit" class="btn btn-primary-sm"><i class="fas fa-filter"></i></button>
+    @if(request('search') || request('status') || request('provider'))
+        <a href="{{ route('admin.users') }}" class="btn btn-ghost text-xs"><i class="fas fa-xmark"></i></a>
+    @endif
+</form>
+@endsection
 
 @section('content')
-<div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+
+{{-- Summary bar --}}
+<div class="flex items-center gap-2 mb-5 text-xs" style="color: var(--text-muted);">
+    <i class="fas fa-users"></i>
+    Toplam <strong class="text-white mx-1">{{ $users->total() }}</strong> kullanıcı &bull;
+    <span class="text-white mx-1">{{ $users->firstItem() }}–{{ $users->lastItem() }}</span> gösteriliyor
+</div>
+
+<div class="card overflow-hidden">
     <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
+        <table class="data-table w-full">
+            <thead>
                 <tr>
-                    <th scope="col" class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Kullanıcı</th>
-                    <th scope="col" class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">İletişim</th>
-                    <th scope="col" class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Durum</th>
-                    <th scope="col" class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Anahtar</th>
-                    <th scope="col" class="px-6 py-4 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">İşlem</th>
+                    <th class="text-left">Kullanıcı</th>
+                    <th class="text-left">İletişim</th>
+                    <th class="text-left">Profil</th>
+                    <th class="text-left">Durum</th>
+                    <th class="text-left">Anahtar</th>
+                    <th class="text-left">Kayıt</th>
+                    <th class="text-right">İşlemler</th>
                 </tr>
             </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-                @foreach($users as $user)
-                <tr class="hover:bg-gray-50 transition">
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <div class="flex items-center">
-                            <div class="flex-shrink-0 h-10 w-10">
-                                @if($user->getRawOriginal('avatar_url'))
-                                    <img class="h-10 w-10 rounded-full object-cover" src="{{ $user->getRawOriginal('avatar_url') }}" alt="">
-                                @else
-                                    <div class="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
-                                        <i class="fas fa-user"></i>
-                                    </div>
-                                @endif
-                            </div>
-                            <div class="ml-4">
-                                <div class="text-sm font-bold text-gray-900">{{ $user->getRawOriginal('name') ?: 'İsimsiz' }}</div>
-                                <div class="text-sm text-gray-500">ID: {{ $user->id }}</div>
+            <tbody>
+                @forelse($users as $user)
+                <tr>
+                    {{-- User --}}
+                    <td>
+                        <div class="flex items-center gap-3">
+                            @if($user->getRawOriginal('avatar_url'))
+                                <img src="{{ $user->getRawOriginal('avatar_url') }}" class="avatar">
+                            @else
+                                <div class="avatar-placeholder"><i class="fas fa-user text-xs"></i></div>
+                            @endif
+                            <div>
+                                <div class="text-sm font-semibold text-white">{{ $user->getRawOriginal('name') ?: 'İsimsiz' }}</div>
+                                <div class="text-xs" style="color: var(--text-muted);">ID: {{ $user->id }}</div>
                             </div>
                         </div>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <div class="text-sm text-gray-900">{{ $user->email ?? 'Bilinmiyor' }}</div>
-                        <div class="text-xs text-gray-500 flex items-center mt-1">
+
+                    {{-- Contact --}}
+                    <td>
+                        <div class="text-xs text-white">{{ $user->email ?: '—' }}</div>
+                        <div class="text-xs mt-1 flex items-center gap-1" style="color: var(--text-muted);">
                             @if($user->provider == 'google')
-                                <i class="fab fa-google text-red-500 mr-1"></i> Google
+                                <i class="fab fa-google text-red-400"></i> Google
                             @elseif($user->provider == 'apple')
-                                <i class="fab fa-apple text-gray-800 mr-1"></i> Apple
-                            @elseif($user->provider)
-                                <i class="fas fa-sign-in-alt mr-1"></i> {{ ucfirst($user->provider) }}
+                                <i class="fab fa-apple"></i> Apple
                             @else
-                                <i class="fas fa-envelope mr-1"></i> Klasik
+                                <i class="fas fa-envelope"></i> Klasik
                             @endif
                         </div>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
+
+                    {{-- Profile info --}}
+                    <td>
+                        <div class="text-xs space-y-0.5">
+                            @if($user->gender)
+                                <div class="flex items-center gap-1" style="color: rgba(255,255,255,0.55);">
+                                    <i class="fas fa-{{ $user->gender=='Erkek'?'mars':'venus' }}" style="color: {{ $user->gender=='Erkek'?'#60a5fa':'#f472b6' }};"></i>
+                                    {{ $user->gender=='Erkek'?'Erkek':'Kadın' }}
+                                    @if($user->age) &bull; {{ $user->age }} yaş @endif
+                                </div>
+                            @endif
+                            @if($user->last_seen_at)
+                                <div style="color: var(--text-muted);">
+                                    @if($user->is_online)
+                                        <span style="color: #4ade80;"><i class="fas fa-circle" style="font-size:7px;"></i> Online</span>
+                                    @else
+                                        <i class="fas fa-clock" style="font-size:9px;"></i> {{ $user->last_seen_at->diffForHumans() }}
+                                    @endif
+                                </div>
+                            @endif
+                        </div>
+                    </td>
+
+                    {{-- Status --}}
+                    <td>
                         @if($user->is_banned)
-                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Yasaklı</span>
+                            <span class="badge badge-red"><i class="fas fa-ban" style="font-size:9px;"></i> Yasaklı</span>
+                        @elseif($user->is_suspended)
+                            <span class="badge badge-yellow"><i class="fas fa-pause" style="font-size:9px;"></i> Askıda</span>
                         @elseif($user->getRawOriginal('avatar_url'))
-                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Aktif</span>
+                            <span class="badge badge-green"><i class="fas fa-circle" style="font-size:7px;"></i> Aktif</span>
                         @else
-                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Eksik Profil</span>
+                            <span class="badge badge-yellow"><i class="fas fa-circle-half-stroke" style="font-size:9px;"></i> Eksik</span>
                         @endif
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <form action="{{ route('admin.users.wallet', $user->id) }}" method="POST" class="flex items-center">
+
+                    {{-- Wallet --}}
+                    <td>
+                        <form action="{{ route('admin.users.wallet', $user->id) }}" method="POST" class="flex items-center gap-2">
                             @csrf
-                            <input type="number" name="wallet_balance" value="{{ $user->wallet_balance ?? 0 }}" class="w-16 border-gray-300 rounded shadow-sm px-2 py-1 text-center border focus:ring-pink-500 focus:border-pink-500 mr-2 outline-none">
-                            <button type="submit" class="text-green-600 hover:text-green-800 bg-green-50 hover:bg-green-100 px-2 py-1 rounded transition" title="Kaydet">
-                                <i class="fas fa-check"></i>
-                            </button>
+                            <input type="number" name="wallet_balance" value="{{ $user->wallet_balance ?? 0 }}"
+                                min="0" class="form-input text-center text-xs py-1.5" style="width: 60px; padding: 6px 8px;">
+                            <button type="submit" class="btn btn-success py-1.5 px-2.5"><i class="fas fa-check text-xs"></i></button>
                         </form>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div class="flex items-center justify-end space-x-2">
-                            <a href="{{ route('admin.user_messages', $user->id) }}" class="text-pink-600 hover:text-pink-900 bg-pink-50 hover:bg-pink-100 px-3 py-2 rounded-md transition font-semibold">
-                                <i class="fas fa-comment-dots mr-1"></i> Mesajlar
+
+                    {{-- Registration date --}}
+                    <td>
+                        <div class="text-xs text-white">{{ $user->created_at->format('d.m.Y') }}</div>
+                        <div class="text-xs" style="color: var(--text-muted);">{{ $user->created_at->format('H:i') }}</div>
+                    </td>
+
+                    {{-- Actions --}}
+                    <td class="text-right">
+                        <div class="flex items-center justify-end gap-2">
+                            <button type="button" class="btn btn-ghost py-1.5 text-xs text-blue-400"
+                                onclick="document.getElementById('editModal-{{ $user->id }}').classList.remove('hidden')">
+                                <i class="fas fa-edit"></i> Düzenle
+                            </button>
+                            
+                            {{-- Edit Modal --}}
+                            <div id="editModal-{{ $user->id }}" class="fixed inset-0 bg-black/50 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+                                <div class="card w-full max-w-md p-6 relative text-left whitespace-normal">
+                                    <button type="button" onclick="document.getElementById('editModal-{{ $user->id }}').classList.add('hidden')" 
+                                        class="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                    <h3 class="text-lg font-semibold text-white mb-4">Kullanıcı Düzenle</h3>
+                                    
+                                    <form action="{{ route('admin.users.update', $user->id) }}" method="POST" class="space-y-4">
+                                        @csrf
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-300 mb-1">İsim</label>
+                                            <input type="text" name="name" value="{{ $user->getRawOriginal('name') }}" class="form-input w-full">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-300 mb-1">E-posta</label>
+                                            <input type="email" name="email" value="{{ $user->getRawOriginal('email') }}" class="form-input w-full">
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label class="block text-xs font-medium text-gray-300 mb-1">Cinsiyet</label>
+                                                <select name="gender" class="form-input w-full">
+                                                    <option value="Kadın" {{ $user->gender == 'Kadın' ? 'selected' : '' }}>Kadın</option>
+                                                    <option value="Erkek" {{ $user->gender == 'Erkek' ? 'selected' : '' }}>Erkek</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-medium text-gray-300 mb-1">Yaş</label>
+                                                <input type="number" name="age" value="{{ $user->age }}" class="form-input w-full">
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-300 mb-1">Avatar URL</label>
+                                            <input type="url" name="avatar_url" value="{{ $user->getRawOriginal('avatar_url') }}" class="form-input w-full">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-300 mb-1">Biyografi</label>
+                                            <textarea name="bio" class="form-input w-full" rows="2">{{ $user->bio }}</textarea>
+                                        </div>
+                                        <div class="flex justify-end gap-2 mt-2">
+                                            <button type="button" class="btn btn-ghost" onclick="document.getElementById('editModal-{{ $user->id }}').classList.add('hidden')">İptal</button>
+                                            <button type="submit" class="btn btn-primary-sm">Kaydet</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                            
+                            <a href="{{ route('admin.user_messages', $user->id) }}" class="btn btn-ghost py-1.5 text-xs">
+                                <i class="fas fa-comment-dots"></i> Mesajlar
                             </a>
+                            @if($user->is_suspended)
+                                <form action="{{ route('admin.users.toggle_suspend', $user->id) }}" method="POST" class="inline">
+                                    @csrf
+                                    <button type="submit" class="btn py-1.5 text-xs btn-success"
+                                        title="Askıyı Kaldır">
+                                        <i class="fas fa-play"></i> Aktif Et
+                                    </button>
+                                </form>
+                            @else
+                                <button type="button" class="btn py-1.5 text-xs btn-ghost"
+                                    title="Askıya Al"
+                                    style="border-color: rgba(234,179,8,0.3); color: #facc15;"
+                                    onclick="document.getElementById('suspendModal-{{ $user->id }}').classList.remove('hidden')">
+                                    <i class="fas fa-pause"></i> Askıya Al
+                                </button>
+                                
+                                {{-- Suspend Modal --}}
+                                <div id="suspendModal-{{ $user->id }}" class="fixed inset-0 bg-black/50 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+                                    <div class="card w-full max-w-md p-6 relative">
+                                        <button onclick="document.getElementById('suspendModal-{{ $user->id }}').classList.add('hidden')" 
+                                            class="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                        <h3 class="text-lg font-semibold text-white mb-4">Kullanıcıyı Askıya Al</h3>
+                                        <div class="text-sm mb-4" style="color: var(--text-muted);">
+                                            <strong class="text-white">{{ $user->name ?: 'İsimsiz' }}</strong> isimli kullanıcıyı askıya almak üzeresiniz. Lütfen bir sebep belirtin. Bu sebep kullanıcıya gösterilecektir.
+                                        </div>
+                                        <form action="{{ route('admin.users.toggle_suspend', $user->id) }}" method="POST">
+                                            @csrf
+                                            <div class="mb-4">
+                                                <label class="block text-xs font-medium text-gray-300 mb-1">Askıya Alınma Sebebi</label>
+                                                <textarea name="suspension_reason" rows="3" class="form-input w-full" required placeholder="Örn: Topluluk kurallarını ihlal eden davranışlar..."></textarea>
+                                            </div>
+                                            <div class="flex justify-end gap-2">
+                                                <button type="button" class="btn btn-ghost" onclick="document.getElementById('suspendModal-{{ $user->id }}').classList.add('hidden')">İptal</button>
+                                                <button type="submit" class="btn btn-danger">Askıya Al</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            @endif
                             <form action="{{ route('admin.users.toggle_ban', $user->id) }}" method="POST">
                                 @csrf
-                                <button type="submit" class="px-3 py-2 rounded-md transition font-semibold {{ $user->is_banned ? 'bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-900' : 'bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-900' }}">
-                                    <i class="fas {{ $user->is_banned ? 'fa-unlock' : 'fa-ban' }} mr-1"></i> 
+                                <button type="submit" class="btn py-1.5 text-xs {{ $user->is_banned ? 'btn-success' : 'btn-danger' }}">
+                                    <i class="fas {{ $user->is_banned ? 'fa-unlock' : 'fa-ban' }}"></i>
                                     {{ $user->is_banned ? 'Banı Kaldır' : 'Banla' }}
                                 </button>
                             </form>
                         </div>
                     </td>
                 </tr>
-                @endforeach
+                @empty
+                <tr>
+                    <td colspan="7" class="text-center py-16" style="color: var(--text-muted);">
+                        <i class="fas fa-user-slash text-4xl mb-3 block opacity-30"></i>
+                        Kullanıcı bulunamadı
+                    </td>
+                </tr>
+                @endforelse
             </tbody>
         </table>
     </div>
-    
+
+    {{-- Pagination --}}
     @if($users->hasPages())
-    <div class="px-6 py-4 border-t border-gray-200">
-        {{ $users->links() }}
+    <div class="p-4 border-t flex items-center justify-between" style="border-color: var(--border);">
+        <div class="text-xs" style="color: var(--text-muted);">
+            Sayfa {{ $users->currentPage() }} / {{ $users->lastPage() }}
+        </div>
+        <div class="pagination">
+            @if($users->onFirstPage())
+                <span><i class="fas fa-chevron-left text-xs"></i></span>
+            @else
+                <a href="{{ $users->previousPageUrl() }}" class="flex items-center justify-center"><i class="fas fa-chevron-left text-xs"></i></a>
+            @endif
+
+            @foreach($users->getUrlRange(max(1, $users->currentPage()-2), min($users->lastPage(), $users->currentPage()+2)) as $page => $url)
+                @if($page == $users->currentPage())
+                    <span class="active-page">{{ $page }}</span>
+                @else
+                    <a href="{{ $url }}">{{ $page }}</a>
+                @endif
+            @endforeach
+
+            @if($users->hasMorePages())
+                <a href="{{ $users->nextPageUrl() }}" class="flex items-center justify-center"><i class="fas fa-chevron-right text-xs"></i></a>
+            @else
+                <span><i class="fas fa-chevron-right text-xs"></i></span>
+            @endif
+        </div>
     </div>
     @endif
 </div>
+
 @endsection

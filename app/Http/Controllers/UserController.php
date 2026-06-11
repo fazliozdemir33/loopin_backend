@@ -63,8 +63,10 @@ class UserController extends Controller
 
         $validated = $request->validate([
             'age' => 'nullable|integer',
+            'height' => 'nullable|integer',
             'bio' => 'nullable|string',
             'gender' => 'nullable|string',
+            'relationship_goal' => 'nullable|string',
             'zodiac_sign' => 'nullable|string',
             'avatar_url' => 'nullable|string',
             'interests' => 'nullable|array',

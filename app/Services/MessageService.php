@@ -66,7 +66,11 @@ class MessageService
 
         // Limit Guard / Payment Wall Check
         if (!$limit->is_paid) {
-            if ($limit->message_count >= 5) {
+            $userMessageCount = Message::where('conversation_id', $conversation->id)
+                ->where('sender_id', $user->id)
+                ->count();
+
+            if ($userMessageCount >= 5) {
                 // Sınır aşıldıysa mesaj kaydedilmeden 402 döndür.
                 throw new \App\Exceptions\PaymentWallException('5 mesaj hakkınız doldu. Sınırsız mesajlaşmak için kilidi açmalısınız (50 TL).');
             }
@@ -123,12 +127,16 @@ class MessageService
 
         $limit->increment('message_count');
 
+        $newUserMessageCount = Message::where('conversation_id', $conversation->id)
+            ->where('sender_id', $user->id)
+            ->count();
+
         // FCM Push Bildirimi gönder
         $this->sendPushNotification($user, $receiverId, $text, $type);
 
         return [
             'status' => 'success',
-            'message_count' => $limit->message_count
+            'message_count' => $newUserMessageCount
         ];
     }
 
@@ -192,25 +200,34 @@ class MessageService
     private function isModerationBlocked($text)
     {
         try {
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . env('OPENAI_API_KEY'),
-                'Content-Type'  => 'application/json',
-            ])->post('https://api.openai.com/v1/chat/completions', [
-                'model'       => 'gpt-4o-mini',
-                'messages'    => [
-                    [
-                        'role' => 'system', 
-                        'content' => 'Sen bir güvenlik moderatörüsün. Kullanıcının mesajında telefon numarası, Instagram, Snapchat, X, Twitter, Telegram, WhatsApp gibi iletişim veya sosyal medya bilgileri verilmeye çalışılıyor mu? SADECE "EVET" veya "HAYIR" yaz.'
-                    ],
-                    ['role' => 'user', 'content' => $text]
-                ],
-                'temperature' => 0.0,
-            ]);
+            $lowerText = strtolower(str_replace([' ', '.', ',', '-', '_'], '', $text));
 
-            $content = trim($response->json('choices.0.message.content'));
-            return str_contains(strtoupper($content), 'EVET');
+            // Ayarlardan yasaklı kelimeleri al
+            $setting = \Illuminate\Support\Facades\DB::table('settings')->where('key', 'banned_keywords')->first();
+            $bannedStr = $setting ? $setting->value : 'instagram, insta, ig:, @, whatsapp, watsap, wp, wpdan, facebook, face, fb, twitter, linkedin, tinder, snapchat, telegram, discord, skype';
+            
+            $bannedKeywords = array_map('trim', explode(',', strtolower($bannedStr)));
+
+            foreach ($bannedKeywords as $word) {
+                if (!empty($word) && str_contains($lowerText, $word)) {
+                    return true;
+                }
+            }
+
+            // Telefon numarası yakalama: Rakamları çıkar, 10 haneden büyükse yakala
+            $numberOnly = preg_replace('/[^0-9]/', '', $text);
+            if (strlen($numberOnly) >= 10) {
+                return true;
+            }
+
+            // Link / Domain yakalama
+            if (preg_match('/[a-zA-Z0-9]+\.(com|net|org|me|tr|io|co)/i', $text)) {
+                return true;
+            }
+
+            return false;
         } catch (\Exception $e) {
-            \Log::error('Moderation error: ' . $e->getMessage());
+            \Log::error('Regex Moderation error: ' . $e->getMessage());
             return false;
         }
     }

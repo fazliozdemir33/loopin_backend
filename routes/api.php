@@ -43,6 +43,7 @@ Route::get('/users/explore', function (Request $request) {
 
     $query = \App\Models\User::where('id', '!=', $user->id)
         ->where('is_banned', false)
+        ->where('is_suspended', false)
         ->whereNotIn('id', $excludeIds)
         ->whereNotNull('avatar_url')
         ->where('avatar_url', '!=', '');
@@ -189,9 +190,15 @@ Route::get('/chat/status/{receiver_id}', function ($receiverId) {
 
     if ($conv) {
         $limit = \App\Models\InteractionLimit::where('conversation_id', $conv->id)->first();
+        
+        $userMessageCount = \Illuminate\Support\Facades\DB::table('messages')
+            ->where('conversation_id', $conv->id)
+            ->where('sender_id', $user->id)
+            ->count();
+            
         return response()->json([
             'is_unlocked' => $limit ? (bool)$limit->is_paid : false,
-            'message_count' => $limit ? $limit->message_count : 0,
+            'message_count' => $userMessageCount,
             'is_blocked' => $isBlockedByMe,
             'am_i_blocked' => $amIBlocked,
         ]);
@@ -209,4 +216,84 @@ Route::get('/support/tickets', [UserController::class, 'getSupportTickets']);
 Route::post('/support/tickets', [UserController::class, 'createSupportTicket']);
 Route::post('/users/upload', [UserController::class, 'uploadPhoto']);
 
+
+
+// ── Paket Yapılandırması (public) ──
+Route::get('/packages', function () {
+    $value = \Illuminate\Support\Facades\DB::table('settings')
+        ->where('key', 'packages')
+        ->value('value');
+
+    $packages = $value ? json_decode($value, true) : [];
+    return response()->json(['data' => $packages]);
+});
+
+// ── Promosyon / Referans Kodu Kullan ──
+Route::post('/promo/redeem', function (\Illuminate\Http\Request $request) {
+    $user = \Illuminate\Support\Facades\Auth::user();
+    if (!$user) {
+        return response()->json(['message' => 'Unauthorized'], 401);
+    }
+
+    $request->validate(['code' => 'required|string|max:30']);
+    $code = strtoupper(trim($request->code));
+
+    $promo = \Illuminate\Support\Facades\DB::table('promo_codes')
+        ->where('code', $code)
+        ->where('is_active', true)
+        ->first();
+
+    if (!$promo) {
+        return response()->json(['message' => 'Geçersiz veya süresi dolmuş bir kod girdiniz.'], 422);
+    }
+
+    // Süre kontrolü
+    if ($promo->expires_at && now()->isAfter($promo->expires_at)) {
+        return response()->json(['message' => 'Bu kodun kullanım süresi dolmuş.'], 422);
+    }
+
+    // Kullanım limiti kontrolü (0 = sınırsız)
+    if ($promo->max_uses > 0 && $promo->used_count >= $promo->max_uses) {
+        return response()->json(['message' => 'Bu kod maksimum kullanım sayısına ulaşmış.'], 422);
+    }
+
+    // Daha önce kullanmış mı?
+    $alreadyUsed = \Illuminate\Support\Facades\DB::table('promo_code_usages')
+        ->where('promo_code_id', $promo->id)
+        ->where('user_id', $user->id)
+        ->exists();
+
+    if ($alreadyUsed) {
+        return response()->json(['message' => 'Bu kodu daha önce kullandınız.'], 422);
+    }
+
+    // Kodu uygula
+    \Illuminate\Support\Facades\DB::table('promo_code_usages')->insert([
+        'promo_code_id' => $promo->id,
+        'user_id'       => $user->id,
+        'used_at'       => now(),
+    ]);
+
+    \Illuminate\Support\Facades\DB::table('promo_codes')
+        ->where('id', $promo->id)
+        ->increment('used_count');
+
+    $user->increment('wallet_balance', $promo->reward_keys);
+
+    // İşlem geçmişine ekle
+    \Illuminate\Support\Facades\DB::table('wallet_transactions')->insert([
+        'user_id'    => $user->id,
+        'title'      => 'Promosyon Kodu: ' . $code,
+        'amount'     => '+' . $promo->reward_keys . ' Anahtar',
+        'is_debit'   => false,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    return response()->json([
+        'message'        => $promo->reward_keys . ' anahtar hesabınıza eklendi! 🎉',
+        'reward_keys'    => $promo->reward_keys,
+        'wallet_balance' => $user->fresh()->wallet_balance,
+    ]);
+});
 

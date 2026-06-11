@@ -18,6 +18,10 @@ class TokenAuthMiddleware
                 if ($user->is_banned) {
                     return response()->json(['message' => 'BANNED', 'error' => 'Hesabınız yasaklanmıştır.'], 403);
                 }
+                
+                if ($user->is_suspended) {
+                    return response()->json(['message' => 'SUSPENDED', 'error' => $user->suspension_reason ?? 'Hesabınız geçici olarak askıya alınmıştır.'], 403);
+                }
                 Auth::setUser($user);
                 try {
                     if (!$user->last_seen_at || now()->diffInMinutes($user->last_seen_at) > 2) {
