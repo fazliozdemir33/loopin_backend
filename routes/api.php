@@ -46,7 +46,12 @@ Route::get('/users/explore', function (Request $request) {
         ->where('is_suspended', false)
         ->whereNotIn('id', $excludeIds)
         ->whereNotNull('avatar_url')
-        ->where('avatar_url', '!=', '');
+        ->where('avatar_url', '!=', '')
+        ->where('name', 'not like', 'Loopn_%')
+        ->where('name', 'not like', 'Loopin_%')
+        ->where('name', 'not like', 'Loopn User%')
+        ->where('name', 'not like', 'Loopin User%')
+        ->where('name', '!=', 'Kullanıcı');
 
     if ($user->latitude && $user->longitude) {
         $lat = (float) $user->latitude;
@@ -65,10 +70,9 @@ Route::get('/users/explore', function (Request $request) {
             })
             ->orderByRaw("CASE WHEN latitude IS NOT NULL AND longitude IS NOT NULL THEN 0 ELSE 1 END")
             ->orderBy('distance', 'asc')
-            ->take(20)
             ->get();
     } else {
-        $users = $query->inRandomOrder()->take(20)->get();
+        $users = $query->inRandomOrder()->get();
     }
 
     return response()->json(['data' => $users]);
