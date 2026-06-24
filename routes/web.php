@@ -354,16 +354,21 @@ Route::prefix('admin')->group(function () {
         /* ── Conversations ── */
         Route::get('/conversations', function (Request $request) {
             $query = \App\Models\Conversation::with(['user1', 'user2'])
-                ->orderBy('updated_at', 'desc');
+                ->leftJoin('interaction_limits', 'interaction_limits.conversation_id', '=', 'conversations.id')
+                ->select('conversations.*', \Illuminate\Support\Facades\DB::raw('COALESCE(interaction_limits.is_paid, 0) as is_actually_unlocked'))
+                ->orderBy('conversations.updated_at', 'desc');
 
             if ($status = $request->get('status')) {
-                if ($status === 'unlocked') $query->where('is_unlocked', true);
-                if ($status === 'locked')   $query->where('is_unlocked', false);
+                if ($status === 'unlocked') $query->where('interaction_limits.is_paid', true);
+                if ($status === 'locked')   $query->where(function($q) {
+                    $q->where('interaction_limits.is_paid', false)->orWhereNull('interaction_limits.is_paid');
+                });
             }
 
             $conversations = $query->paginate(25)->withQueryString();
             return view('admin.conversations', compact('conversations'));
         })->name('admin.conversations');
+
 
         /* ── Reports ── */
         Route::get('/reports', function () {

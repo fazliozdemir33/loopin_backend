@@ -70,7 +70,7 @@
                         </span>
                     </td>
                     <td>
-                        @if($conv->is_unlocked)
+                        @if($conv->is_actually_unlocked)
                             <span class="badge badge-green"><i class="fas fa-lock-open" style="font-size:9px;"></i> Açık</span>
                         @else
                             <span class="badge badge-yellow"><i class="fas fa-lock" style="font-size:9px;"></i> Kilitli</span>
